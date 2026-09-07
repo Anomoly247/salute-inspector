@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Salute Inspector | Verification Tool</title>
+    <style>
+        :root {
+            --bg-color: #0f111a;
+            --card-bg: #1e2230;
+            --accent-cyan: #00f0ff;
+            --accent-pink: #ff007f;
+            --text-color: #e0e6ed;
+            --border-color: #2e3440;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            max-width: 1000px;
+            width: 100%;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 25px;
+            border-bottom: 2px solid var(--accent-cyan);
+            padding-bottom: 15px;
+        }
+
+        h1 {
+            color: var(--accent-cyan);
+            margin: 0 0 5px 0;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        p.subtitle {
+            margin: 0;
+            color: #8a99ad;
+            font-size: 0.95rem;
+        }
+
+        .controls {
+            background-color: var(--card-bg);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 25px;
+        }
+
+        .input-group {
+            display: flex;
+            flex: 1;
+            gap: 10px;
+            min-width: 300px;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .btn {
+            background-color: var(--accent-cyan);
+            color: #000;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+            box-shadow: 0 0 10px var(--accent-cyan);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+
+        .slider-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        input[type="range"] {
+            accent-color: var(--accent-pink);
+        }
+
+        .preview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .card h3 {
+            margin-top: 0;
+            color: var(--accent-pink);
+            align-self: flex-start;
+        }
+
+        .image-box {
+            width: 100%;
+            height: 400px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            background-color: #0a0c10;
+            border-radius: 4px;
+        }
+
+        img, canvas {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .guide {
+            margin-top: 25px;
+            background-color: var(--card-bg);
+            border-left: 4px solid var(--accent-pink);
+            padding: 15px;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .guide h4 { margin: 0 0 8px 0; color: #fff; }
+        .guide ul { margin: 0; padding-left: 20px; color: #b0bec5; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Salute Inspector</h1>
+        <p class="subtitle">Bouncer Verification & Digital Manipulation Detector</p>
+    </header>
+
+    <div class="controls">
+        <div class="input-group">
+            <label for="fileInput" class="btn">Select Image File</label>
+            <input type="file" id="fileInput" accept="image/*">
+            <button class="btn btn-outline" id="processBtn" disabled>Run ELA Inspection</button>
+        </div>
+
+        <div class="slider-group">
+            <label for="qualitySlider">JPEG Scale:</label>
+            <input type="range" id="qualitySlider" min="50" max="98" value="90">
+            <span id="qualityVal">90%</span>
+        </div>
+    </div>
+
+    <div class="preview-grid">
+        <div class="card">
+            <h3>Original Photo</h3>
+            <div class="image-box">
+                <img id="sourceImage" alt="Upload an image to start inspection">
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>ELA Compression Heat Map</h3>
+            <div class="image-box">
+                <canvas id="elaCanvas"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="guide">
+        <h4>Verification Checklist for Moderators:</h4>
+        <ul>
+            <li><strong>Uniform Grain:</strong> Genuine handwritten signs show soft, uniform noise across the paper surface.</li>
+            <li><strong>Bright Halos / Outlines:</strong> Digitally added text, pasted graphics, or edited username overlays stand out with high-contrast bright highlights around character edges.</li>
+        </ul>
+    </div>
+</div>
+
+<script>
+    const fileInput = document.getElementById('fileInput');
+    const sourceImage = document.getElementById('sourceImage');
+    const elaCanvas = document.getElementById('elaCanvas');
+    const processBtn = document.getElementById('processBtn');
+    const qualitySlider = document.getElementById('qualitySlider');
+    const qualityVal = document.getElementById('qualityVal');
+
+    let loadedFile = null;
+
+    qualitySlider.addEventListener('input', (e) => {
+        qualityVal.textContent = `${e.target.value}%`;
+        if (loadedFile) runELA();
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+            loadedFile = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                sourceImage.src = evt.target.result;
+                processBtn.disabled = false;
+                runELA();
+            };
+            reader.readAsDataURL(loadedFile);
+        }
+    });
+
+    processBtn.addEventListener('click', runELA);
+
+    function runELA() {
+        if (!sourceImage.src) return;
+
+        const img = new Image();
+        img.src = sourceImage.src;
+        img.onload = () => {
+            const width = img.width;
+            const height = img.height;
+
+            const origCanvas = document.createElement('canvas');
+            origCanvas.width = width;
+            origCanvas.height = height;
+            const origCtx = origCanvas.getContext('2d');
+            origCtx.drawImage(img, 0, 0);
+
+            const quality = parseFloat(qualitySlider.value) / 100;
+            const compressedDataUrl = origCanvas.toDataURL('image/jpeg', quality);
+
+            const compImg = new Image();
+            compImg.src = compressedDataUrl;
+            compImg.onload = () => {
+                const compCanvas = document.createElement('canvas');
+                compCanvas.width = width;
+                compCanvas.height = height;
+                const compCtx = compCanvas.getContext('2d');
+                compCtx.drawImage(compImg, 0, 0);
+
+                const origData = origCtx.getImageData(0, 0, width, height);
+                const compData = compCtx.getImageData(0, 0, width, height);
+
+                elaCanvas.width = width;
+                elaCanvas.height = height;
+                const elaCtx = elaCanvas.getContext('2d');
+                const elaData = elaCtx.createImageData(width, height);
+
+                let maxDiff = 0;
+                const diffs = new Float32Array(width * height * 3);
+
+                for (let i = 0; i < origData.data.length; i += 4) {
+                    const rDiff = Math.abs(origData.data[i] - compData.data[i]);
+                    const gDiff = Math.abs(origData.data[i+1] - compData.data[i+1]);
+                    const bDiff = Math.abs(origData.data[i+2] - compData.data[i+2]);
+
+                    const pixelIdx = (i / 4) * 3;
+                    diffs[pixelIdx] = rDiff;
+                    diffs[pixelIdx + 1] = gDiff;
+                    diffs[pixelIdx + 2] = bDiff;
+
+                    if (rDiff > maxDiff) maxDiff = rDiff;
+                    if (gDiff > maxDiff) maxDiff = gDiff;
+                    if (bDiff > maxDiff) maxDiff = bDiff;
+                }
+
+                const scale = maxDiff > 0 ? 255 / maxDiff : 1;
+
+                for (let i = 0; i < origData.data.length; i += 4) {
+                    const pixelIdx = (i / 4) * 3;
+                    elaData.data[i]     = Math.min(255, diffs[pixelIdx] * scale);     // Red
+                    elaData.data[i + 1] = Math.min(255, diffs[pixelIdx + 1] * scale); // Green
+                    elaData.data[i + 2] = Math.min(255, diffs[pixelIdx + 2] * scale); // Blue
+                    elaData.data[i + 3] = 255;                                        // Alpha
+                }
+
+                elaCtx.putImageData(elaData, 0, 0);
+            };
+        };
+    }
+</script>
+
+</body>
+</html>
