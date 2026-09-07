@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Salute Inspector | Verification Tool</title>
+    <title>Salute & AI Inspector | Verification Tool</title>
     <style>
         :root {
             --bg-color: #0f111a;
             --card-bg: #1e2230;
             --accent-cyan: #00f0ff;
             --accent-pink: #ff007f;
+            --accent-yellow: #ffd700;
             --text-color: #e0e6ed;
             --border-color: #2e3440;
         }
@@ -26,13 +27,13 @@
         }
 
         .container {
-            max-width: 1000px;
+            max-width: 1100px;
             width: 100%;
         }
 
         header {
             text-align: center;
-            margin-bottom: 25px;
+            margin-bottom: 20px;
             border-bottom: 2px solid var(--accent-cyan);
             padding-bottom: 15px;
         }
@@ -60,19 +61,16 @@
             gap: 15px;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 25px;
+            margin-bottom: 20px;
         }
 
         .input-group {
             display: flex;
-            flex: 1;
             gap: 10px;
-            min-width: 300px;
+            align-items: center;
         }
 
-        input[type="file"] {
-            display: none;
-        }
+        input[type="file"] { display: none; }
 
         .btn {
             background-color: var(--accent-cyan);
@@ -96,19 +94,22 @@
             color: var(--accent-cyan);
         }
 
-        .slider-group {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        input[type="range"] {
-            accent-color: var(--accent-pink);
+        .meta-alert {
+            width: 100%;
+            background-color: rgba(255, 215, 0, 0.1);
+            border: 1px solid var(--accent-yellow);
+            color: var(--accent-yellow);
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: none;
+            font-family: monospace;
+            white-space: pre-wrap;
         }
 
         .preview-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
             gap: 20px;
         }
 
@@ -122,31 +123,37 @@
             align-items: center;
         }
 
-        .card h3 {
-            margin-top: 0;
-            color: var(--accent-pink);
-            align-self: flex-start;
+        .card-header {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
         }
+
+        .card h3 { margin: 0; color: var(--accent-pink); }
 
         .image-box {
             width: 100%;
-            height: 400px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            height: 420px;
             overflow: hidden;
             background-color: #0a0c10;
             border-radius: 4px;
+            position: relative;
+            cursor: grab;
         }
 
+        .image-box:active { cursor: grabbing; }
+
         img, canvas {
-            max-width: 100%;
-            max-height: 100%;
-            object-fit: contain;
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform-origin: 0 0;
         }
 
         .guide {
-            margin-top: 25px;
+            margin-top: 20px;
             background-color: var(--card-bg);
             border-left: 4px solid var(--accent-pink);
             padding: 15px;
@@ -161,45 +168,53 @@
 
 <div class="container">
     <header>
-        <h1>Salute Inspector</h1>
-        <p class="subtitle">Bouncer Verification & Digital Manipulation Detector</p>
+        <h1>Salute & AI Inspector</h1>
+        <p class="subtitle">Bouncer Verification, Digital Manipulation & AI Artifact Detector</p>
     </header>
 
     <div class="controls">
         <div class="input-group">
             <label for="fileInput" class="btn">Select Image File</label>
             <input type="file" id="fileInput" accept="image/*">
-            <button class="btn btn-outline" id="processBtn" disabled>Run ELA Inspection</button>
+            <button class="btn btn-outline" id="modeBtn">Mode: ELA Heat Map</button>
         </div>
 
-        <div class="slider-group">
-            <label for="qualitySlider">JPEG Scale:</label>
-            <input type="range" id="qualitySlider" min="50" max="98" value="90">
-            <span id="qualityVal">90%</span>
+        <div class="input-group">
+            <label for="zoomSlider">Zoom:</label>
+            <input type="range" id="zoomSlider" min="1" max="5" step="0.1" value="1">
+            <span id="zoomVal">1x</span>
         </div>
     </div>
 
+    <div class="meta-alert" id="metaAlert"></div>
+
     <div class="preview-grid">
         <div class="card">
-            <h3>Original Photo</h3>
-            <div class="image-box">
+            <div class="card-header">
+                <h3>Original Photo</h3>
+            </div>
+            <div class="image-box" id="box1">
                 <img id="sourceImage" alt="Upload an image to start inspection">
             </div>
         </div>
 
         <div class="card">
-            <h3>ELA Compression Heat Map</h3>
-            <div class="image-box">
+            <div class="card-header">
+                <h3 id="analysisTitle">ELA Compression Map</h3>
+            </div>
+            <div class="image-box" id="box2">
                 <canvas id="elaCanvas"></canvas>
             </div>
         </div>
     </div>
 
     <div class="guide">
-        <h4>Verification Checklist for Moderators:</h4>
+        <h4>Bouncer Verification Guide:</h4>
         <ul>
-            <li><strong>Uniform Grain:</strong> Genuine handwritten signs show soft, uniform noise across the paper surface.</li>
-            <li><strong>Bright Halos / Outlines:</strong> Digitally added text, pasted graphics, or edited username overlays stand out with high-contrast bright highlights around character edges.</li>
+            <li><strong>AI Metadata Check:</strong> Alerts appear at the top if AI generation strings (DALL-E, Midjourney, Stable Diffusion, Photoshop Generative Fill) are found in file headers.</li>
+            <li><strong>Digital Edits (ELA Mode):</strong> Edited text or pasted usernames glow brightly compared to the background.</li>
+            <li><strong>AI Artifacts (Edge Mode):</strong> Toggle mode to inspect unnatural skin smoothing, melted fingers, or distorted background text.</li>
+            <li><strong>Synchronized Zoom/Pan:</strong> Click and drag on either image to pan both views simultaneously.</li>
         </ul>
     </div>
 </div>
@@ -208,33 +223,112 @@
     const fileInput = document.getElementById('fileInput');
     const sourceImage = document.getElementById('sourceImage');
     const elaCanvas = document.getElementById('elaCanvas');
-    const processBtn = document.getElementById('processBtn');
-    const qualitySlider = document.getElementById('qualitySlider');
-    const qualityVal = document.getElementById('qualityVal');
+    const modeBtn = document.getElementById('modeBtn');
+    const zoomSlider = document.getElementById('zoomSlider');
+    const zoomVal = document.getElementById('zoomVal');
+    const metaAlert = document.getElementById('metaAlert');
+    const analysisTitle = document.getElementById('analysisTitle');
+    const box1 = document.getElementById('box1');
+    const box2 = document.getElementById('box2');
 
-    let loadedFile = null;
+    let currentMode = 'ela'; // 'ela' or 'edge'
+    let zoom = 1;
+    let panX = 0;
+    let panY = 0;
+    let isDragging = false;
+    let startX, startY;
 
-    qualitySlider.addEventListener('input', (e) => {
-        qualityVal.textContent = `${e.target.value}%`;
-        if (loadedFile) runELA();
+    // Mode Toggle
+    modeBtn.addEventListener('click', () => {
+        if (currentMode === 'ela') {
+            currentMode = 'edge';
+            modeBtn.textContent = 'Mode: Edge Detection';
+            analysisTitle.textContent = 'Edge / Noise Gradient Map';
+        } else {
+            currentMode = 'ela';
+            modeBtn.textContent = 'Mode: ELA Heat Map';
+            analysisTitle.textContent = 'ELA Compression Map';
+        }
+        if (sourceImage.src) runAnalysis();
     });
 
+    // Zoom Handling
+    zoomSlider.addEventListener('input', (e) => {
+        zoom = parseFloat(e.target.value);
+        zoomVal.textContent = `${zoom.toFixed(1)}x`;
+        updateTransforms();
+    });
+
+    // Synchronized Pan
+    [box1, box2].forEach(box => {
+        box.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startX = e.clientX - panX;
+            startY = e.clientY - panY;
+        });
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        panX = e.clientX - startX;
+        panY = e.clientY - startY;
+        updateTransforms();
+    });
+
+    window.addEventListener('mouseup', () => isDragging = false);
+
+    function updateTransforms() {
+        const transformStr = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+        sourceImage.style.transform = transformStr;
+        elaCanvas.style.transform = transformStr;
+    }
+
+    // Image Upload & Metadata Scanner
     fileInput.addEventListener('change', (e) => {
         if (e.target.files && e.target.files[0]) {
-            loadedFile = e.target.files[0];
+            const file = e.target.files[0];
+            scanMetadata(file);
+
             const reader = new FileReader();
             reader.onload = (evt) => {
                 sourceImage.src = evt.target.result;
-                processBtn.disabled = false;
-                runELA();
+                sourceImage.onload = () => {
+                    panX = 0; panY = 0; zoom = 1;
+                    zoomSlider.value = 1;
+                    zoomVal.textContent = '1x';
+                    updateTransforms();
+                    runAnalysis();
+                };
             };
-            reader.readAsDataURL(loadedFile);
+            reader.readAsDataURL(file);
         }
     });
 
-    processBtn.addEventListener('click', runELA);
+    function scanMetadata(file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const contents = e.target.result;
+            const aiKeywords = ['stable diffusion', 'midjourney', 'dall-e', 'dalle', 'novelai', 'comfyui', 'automatic1111', 'photoshop generative fill', 'adobe firefly', 'c2pa'];
+            const found = [];
 
-    function runELA() {
+            const textDecoder = new TextDecoder('latin1');
+            const fileStr = textDecoder.decode(contents.slice(0, 100000)).toLowerCase();
+
+            aiKeywords.forEach(kw => {
+                if (fileStr.includes(kw)) found.push(kw.toUpperCase());
+            });
+
+            if (found.length > 0) {
+                metaAlert.style.display = 'block';
+                metaAlert.textContent = `⚠️ AI METADATA DETECTED!\nSoftware / Generator Signatures Found in File Header: [ ${found.join(', ')} ]`;
+            } else {
+                metaAlert.style.display = 'none';
+            }
+        };
+        reader.readAsArrayBuffer(file.slice(0, 100000));
+    }
+
+    function runAnalysis() {
         if (!sourceImage.src) return;
 
         const img = new Image();
@@ -243,62 +337,73 @@
             const width = img.width;
             const height = img.height;
 
-            const origCanvas = document.createElement('canvas');
-            origCanvas.width = width;
-            origCanvas.height = height;
-            const origCtx = origCanvas.getContext('2d');
-            origCtx.drawImage(img, 0, 0);
+            elaCanvas.width = width;
+            elaCanvas.height = height;
+            const ctx = elaCanvas.getContext('2d');
 
-            const quality = parseFloat(qualitySlider.value) / 100;
-            const compressedDataUrl = origCanvas.toDataURL('image/jpeg', quality);
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = width;
+            tempCanvas.height = height;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(img, 0, 0);
 
-            const compImg = new Image();
-            compImg.src = compressedDataUrl;
-            compImg.onload = () => {
-                const compCanvas = document.createElement('canvas');
-                compCanvas.width = width;
-                compCanvas.height = height;
-                const compCtx = compCanvas.getContext('2d');
-                compCtx.drawImage(compImg, 0, 0);
+            if (currentMode === 'ela') {
+                const compressedDataUrl = tempCanvas.toDataURL('image/jpeg', 0.90);
+                const compImg = new Image();
+                compImg.src = compressedDataUrl;
+                compImg.onload = () => {
+                    const compCanvas = document.createElement('canvas');
+                    compCanvas.width = width;
+                    compCanvas.height = height;
+                    const compCtx = compCanvas.getContext('2d');
+                    compCtx.drawImage(compImg, 0, 0);
 
-                const origData = origCtx.getImageData(0, 0, width, height);
-                const compData = compCtx.getImageData(0, 0, width, height);
+                    const origData = tempCtx.getImageData(0, 0, width, height);
+                    const compData = compCtx.getImageData(0, 0, width, height);
+                    const elaData = ctx.createImageData(width, height);
 
-                elaCanvas.width = width;
-                elaCanvas.height = height;
-                const elaCtx = elaCanvas.getContext('2d');
-                const elaData = elaCtx.createImageData(width, height);
+                    let maxDiff = 0;
+                    for (let i = 0; i < origData.data.length; i += 4) {
+                        const rDiff = Math.abs(origData.data[i] - compData.data[i]);
+                        const gDiff = Math.abs(origData.data[i+1] - compData.data[i+1]);
+                        const bDiff = Math.abs(origData.data[i+2] - compData.data[i+2]);
+                        const maxD = Math.max(rDiff, gDiff, bDiff);
+                        if (maxD > maxDiff) maxDiff = maxD;
+                    }
 
-                let maxDiff = 0;
-                const diffs = new Float32Array(width * height * 3);
+                    const scale = maxDiff > 0 ? 255 / maxDiff : 1;
+                    for (let i = 0; i < origData.data.length; i += 4) {
+                        elaData.data[i]     = Math.min(255, Math.abs(origData.data[i] - compData.data[i]) * scale);
+                        elaData.data[i + 1] = Math.min(255, Math.abs(origData.data[i+1] - compData.data[i+1]) * scale);
+                        elaData.data[i + 2] = Math.min(255, Math.abs(origData.data[i+2] - compData.data[i+2]) * scale);
+                        elaData.data[i + 3] = 255;
+                    }
+                    ctx.putImageData(elaData, 0, 0);
+                };
+            } else {
+                // Edge Detection Mode
+                const srcData = tempCtx.getImageData(0, 0, width, height);
+                const edgeData = ctx.createImageData(width, height);
+                
+                for (let y = 1; y < height - 1; y++) {
+                    for (let x = 1; x < width - 1; x++) {
+                        const idx = (y * width + x) * 4;
+                        const gx = (-1 * srcData.data[((y-1)*width + (x-1))*4]) + (1 * srcData.data[((y-1)*width + (x+1))*4]) +
+                                   (-2 * srcData.data[(y*width + (x-1))*4])     + (2 * srcData.data[(y*width + (x+1))*4]) +
+                                   (-1 * srcData.data[((y+1)*width + (x-1))*4]) + (1 * srcData.data[((y+1)*width + (x+1))*4]);
 
-                for (let i = 0; i < origData.data.length; i += 4) {
-                    const rDiff = Math.abs(origData.data[i] - compData.data[i]);
-                    const gDiff = Math.abs(origData.data[i+1] - compData.data[i+1]);
-                    const bDiff = Math.abs(origData.data[i+2] - compData.data[i+2]);
+                        const gy = (-1 * srcData.data[((y-1)*width + (x-1))*4]) + (-2 * srcData.data[((y-1)*width + x)*4]) + (-1 * srcData.data[((y-1)*width + (x+1))*4]) +
+                                   (1 * srcData.data[((y+1)*width + (x-1))*4])  + (2 * srcData.data[((y+1)*width + x)*4])  + (1 * srcData.data[((y+1)*width + (x+1))*4]);
 
-                    const pixelIdx = (i / 4) * 3;
-                    diffs[pixelIdx] = rDiff;
-                    diffs[pixelIdx + 1] = gDiff;
-                    diffs[pixelIdx + 2] = bDiff;
-
-                    if (rDiff > maxDiff) maxDiff = rDiff;
-                    if (gDiff > maxDiff) maxDiff = gDiff;
-                    if (bDiff > maxDiff) maxDiff = bDiff;
+                        const val = Math.min(255, Math.sqrt(gx * gx + gy * gy));
+                        edgeData.data[idx] = val;
+                        edgeData.data[idx+1] = val;
+                        edgeData.data[idx+2] = val;
+                        edgeData.data[idx+3] = 255;
+                    }
                 }
-
-                const scale = maxDiff > 0 ? 255 / maxDiff : 1;
-
-                for (let i = 0; i < origData.data.length; i += 4) {
-                    const pixelIdx = (i / 4) * 3;
-                    elaData.data[i]     = Math.min(255, diffs[pixelIdx] * scale);     // Red
-                    elaData.data[i + 1] = Math.min(255, diffs[pixelIdx + 1] * scale); // Green
-                    elaData.data[i + 2] = Math.min(255, diffs[pixelIdx + 2] * scale); // Blue
-                    elaData.data[i + 3] = 255;                                        // Alpha
-                }
-
-                elaCtx.putImageData(elaData, 0, 0);
-            };
+                ctx.putImageData(edgeData, 0, 0);
+            }
         };
     }
 </script>
