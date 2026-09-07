@@ -70,6 +70,20 @@
             align-items: center;
         }
 
+        .url-input {
+            min-width: 320px;
+            background-color: #0a0c10;
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 10px 12px;
+        }
+
+        .url-input:focus {
+            outline: 1px solid var(--accent-cyan);
+            border-color: var(--accent-cyan);
+        }
+
         input[type="file"] { display: none; }
 
         .btn {
@@ -90,6 +104,33 @@
 
         .btn-outline {
             background: transparent;
+            border: 1px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .status-alert {
+            width: 100%;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: none;
+            white-space: pre-wrap;
+        }
+
+        .status-alert.error {
+            background-color: rgba(255, 0, 127, 0.1);
+            border: 1px solid var(--accent-pink);
+            color: #ff8dbf;
+        }
+
+        .status-alert.info {
+            background-color: rgba(0, 240, 255, 0.1);
             border: 1px solid var(--accent-cyan);
             color: var(--accent-cyan);
         }
@@ -162,6 +203,13 @@
 
         .guide h4 { margin: 0 0 8px 0; color: #fff; }
         .guide ul { margin: 0; padding-left: 20px; color: #b0bec5; }
+
+        @media (max-width: 800px) {
+            .url-input {
+                min-width: 0;
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
@@ -176,6 +224,13 @@
         <div class="input-group">
             <label for="fileInput" class="btn">Select Image File</label>
             <input type="file" id="fileInput" accept="image/*">
+        </div>
+
+        <div class="input-group" style="flex: 1 1 460px;">
+            <input type="text" id="imageUrlInput" class="url-input" placeholder="https://example.com/image.jpg" aria-label="Image URL">
+            <button class="btn" id="loadUrlBtn">Load Image</button>
+            <button class="btn btn-outline" id="pasteUrlBtn">Paste URL</button>
+            <button class="btn btn-outline" id="retryUrlBtn" style="display:none;">Retry</button>
             <button class="btn btn-outline" id="modeBtn">Mode: ELA Heat Map</button>
         </div>
 
@@ -186,6 +241,7 @@
         </div>
     </div>
 
+    <div class="status-alert" id="statusAlert"></div>
     <div class="meta-alert" id="metaAlert"></div>
 
     <div class="preview-grid">
@@ -224,8 +280,13 @@
     const sourceImage = document.getElementById('sourceImage');
     const elaCanvas = document.getElementById('elaCanvas');
     const modeBtn = document.getElementById('modeBtn');
+    const imageUrlInput = document.getElementById('imageUrlInput');
+    const loadUrlBtn = document.getElementById('loadUrlBtn');
+    const pasteUrlBtn = document.getElementById('pasteUrlBtn');
+    const retryUrlBtn = document.getElementById('retryUrlBtn');
     const zoomSlider = document.getElementById('zoomSlider');
     const zoomVal = document.getElementById('zoomVal');
+    const statusAlert = document.getElementById('statusAlert');
     const metaAlert = document.getElementById('metaAlert');
     const analysisTitle = document.getElementById('analysisTitle');
     const box1 = document.getElementById('box1');
@@ -237,6 +298,8 @@
     let panY = 0;
     let isDragging = false;
     let startX, startY;
+    let isLoadingUrl = false;
+    let lastFailedUrl = '';
 
     // Mode Toggle
     modeBtn.addEventListener('click', () => {
@@ -287,45 +350,242 @@
     fileInput.addEventListener('change', (e) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
-            scanMetadata(file);
-
-            const reader = new FileReader();
-            reader.onload = (evt) => {
-                sourceImage.src = evt.target.result;
-                sourceImage.onload = () => {
-                    panX = 0; panY = 0; zoom = 1;
-                    zoomSlider.value = 1;
-                    zoomVal.textContent = '1x';
-                    updateTransforms();
-                    runAnalysis();
-                };
-            };
-            reader.readAsDataURL(file);
+            loadImageBlob(file, 'local file').catch((err) => {
+                showStatus(`Could not read local file.\n${err.message || 'Try another image file.'}`, 'error');
+            });
         }
     });
 
-    function scanMetadata(file) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const contents = e.target.result;
-            const aiKeywords = ['stable diffusion', 'midjourney', 'dall-e', 'dalle', 'novelai', 'comfyui', 'automatic1111', 'photoshop generative fill', 'adobe firefly', 'c2pa'];
-            const found = [];
+    loadUrlBtn.addEventListener('click', () => loadImageFromUrl(imageUrlInput.value));
 
-            const textDecoder = new TextDecoder('latin1');
-            const fileStr = textDecoder.decode(contents.slice(0, 100000)).toLowerCase();
+    imageUrlInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            loadImageFromUrl(imageUrlInput.value);
+        }
+    });
 
-            aiKeywords.forEach(kw => {
-                if (fileStr.includes(kw)) found.push(kw.toUpperCase());
-            });
+    pasteUrlBtn.addEventListener('click', async () => {
+        if (!navigator.clipboard || !navigator.clipboard.readText) {
+            showStatus('Clipboard access is unavailable in this browser.\nPaste the URL manually into the field.', 'error');
+            return;
+        }
 
-            if (found.length > 0) {
-                metaAlert.style.display = 'block';
-                metaAlert.textContent = `⚠️ AI METADATA DETECTED!\nSoftware / Generator Signatures Found in File Header: [ ${found.join(', ')} ]`;
-            } else {
-                metaAlert.style.display = 'none';
+        try {
+            const text = await navigator.clipboard.readText();
+            const pastedUrl = extractUrlFromText(text);
+            if (!pastedUrl) {
+                showStatus('Clipboard text is not a valid http/https image URL.\nCopy a direct image link and try again.', 'error');
+                return;
             }
-        };
-        reader.readAsArrayBuffer(file.slice(0, 100000));
+            imageUrlInput.value = pastedUrl;
+            loadImageFromUrl(pastedUrl);
+        } catch (err) {
+            showStatus('Could not read clipboard text.\nAllow clipboard permission, then try again.', 'error');
+        }
+    });
+
+    retryUrlBtn.addEventListener('click', () => {
+        if (lastFailedUrl) loadImageFromUrl(lastFailedUrl);
+    });
+
+    document.addEventListener('paste', (e) => {
+        if (isLoadingUrl) return;
+        const text = e.clipboardData ? e.clipboardData.getData('text') : '';
+        const pastedUrl = extractUrlFromText(text);
+        if (pastedUrl) {
+            imageUrlInput.value = pastedUrl;
+            showStatus('URL pasted. Click "Load Image" to fetch it.', 'info');
+        }
+    });
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        window.addEventListener(eventName, (e) => {
+            e.preventDefault();
+        });
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        window.addEventListener(eventName, (e) => {
+            e.preventDefault();
+        });
+    });
+
+    window.addEventListener('drop', (e) => {
+        if (isLoadingUrl) return;
+        const dt = e.dataTransfer;
+        if (!dt) return;
+
+        if (dt.files && dt.files.length > 0) {
+            const imageFile = Array.from(dt.files).find(file => file.type.startsWith('image/'));
+            if (!imageFile) {
+                showStatus('Dropped files do not include an image.\nDrop an image file or image URL.', 'error');
+                return;
+            }
+            loadImageBlob(imageFile, 'dropped file').catch((err) => {
+                showStatus(`Could not load dropped image.\n${err.message || 'Try another image file.'}`, 'error');
+            });
+            return;
+        }
+
+        const droppedText = dt.getData('text/uri-list') || dt.getData('text/plain');
+        const droppedUrl = extractUrlFromText(droppedText);
+        if (!droppedUrl) {
+            showStatus('Dropped text is not a valid http/https URL.\nDrop a direct image URL or image file.', 'error');
+            return;
+        }
+        imageUrlInput.value = droppedUrl;
+        loadImageFromUrl(droppedUrl);
+    });
+
+    function extractUrlFromText(text) {
+        if (!text) return '';
+        const candidate = text.trim().split('\n')[0].trim();
+        try {
+            const parsed = new URL(candidate);
+            return (parsed.protocol === 'http:' || parsed.protocol === 'https:') ? parsed.toString() : '';
+        } catch {
+            return '';
+        }
+    }
+
+    function showStatus(message, type = 'error') {
+        statusAlert.className = `status-alert ${type}`;
+        statusAlert.textContent = message;
+        statusAlert.style.display = 'block';
+    }
+
+    function hideStatus() {
+        statusAlert.style.display = 'none';
+        statusAlert.textContent = '';
+        statusAlert.className = 'status-alert';
+    }
+
+    function resetViewport() {
+        panX = 0;
+        panY = 0;
+        zoom = 1;
+        zoomSlider.value = 1;
+        zoomVal.textContent = '1x';
+        updateTransforms();
+    }
+
+    function setUrlLoadingState(loading) {
+        isLoadingUrl = loading;
+        loadUrlBtn.disabled = loading;
+        pasteUrlBtn.disabled = loading;
+        retryUrlBtn.disabled = loading;
+        loadUrlBtn.textContent = loading ? 'Loading...' : 'Load Image';
+    }
+
+    async function loadImageBlob(blob, sourceLabel) {
+        if (!blob || (blob.type && !blob.type.startsWith('image/'))) {
+            throw new Error('The selected content is not an image.');
+        }
+
+        hideStatus();
+        await scanMetadataBlob(blob);
+
+        const dataUrl = await blobToDataUrl(blob);
+        await waitForImageLoad(sourceImage, dataUrl);
+        resetViewport();
+        runAnalysis();
+
+        if (sourceLabel !== 'local file') {
+            showStatus(`Loaded image from ${sourceLabel}.`, 'info');
+        }
+    }
+
+    async function loadImageFromUrl(urlText) {
+        if (!urlText || !urlText.trim()) {
+            showStatus('Image URL is required.\nPaste a direct http/https image link and click "Load Image".', 'error');
+            return;
+        }
+
+        const url = extractUrlFromText(urlText);
+        if (!url) {
+            showStatus('Invalid URL.\nUse a full http:// or https:// image link before loading.', 'error');
+            return;
+        }
+
+        hideStatus();
+        setUrlLoadingState(true);
+        retryUrlBtn.style.display = 'none';
+        const timeoutMs = 12000;
+        const controller = new AbortController();
+        const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+            const response = await fetch(url, { signal: controller.signal, mode: 'cors' });
+            if (!response.ok) {
+                throw new Error(`Server returned ${response.status}.`);
+            }
+
+            const contentType = (response.headers.get('content-type') || '').toLowerCase();
+            if (contentType && !contentType.startsWith('image/')) {
+                throw new Error('URL response is not an image.');
+            }
+
+            const blob = await response.blob();
+            if (blob.type && !blob.type.startsWith('image/')) {
+                throw new Error('Fetched file is not recognized as an image.');
+            }
+
+            await loadImageBlob(blob, 'URL');
+        } catch (err) {
+            lastFailedUrl = url;
+            retryUrlBtn.style.display = 'inline-block';
+
+            if (err.name === 'AbortError') {
+                showStatus('Image request timed out after 12 seconds.\nClick Retry or try a smaller/direct image URL.', 'error');
+            } else if (err.message === 'URL response is not an image.' || err.message === 'Fetched file is not recognized as an image.') {
+                showStatus('The URL did not return an image file.\nUse a direct image link ending in .jpg, .png, or similar.', 'error');
+            } else if (err.message.startsWith('Server returned')) {
+                showStatus(`${err.message}\nVerify the image URL and ensure the host allows direct access.`, 'error');
+            } else {
+                showStatus('Could not fetch image from URL.\nThe host may block cross-origin requests (CORS), the network may be unavailable, or the URL may be invalid.\nTry another direct image URL or download and use file upload.', 'error');
+            }
+        } finally {
+            clearTimeout(timeoutHandle);
+            setUrlLoadingState(false);
+        }
+    }
+
+    async function scanMetadataBlob(blob) {
+        const aiKeywords = ['stable diffusion', 'midjourney', 'dall-e', 'dalle', 'novelai', 'comfyui', 'automatic1111', 'photoshop generative fill', 'adobe firefly', 'c2pa'];
+        const found = [];
+        const contents = await blob.slice(0, 100000).arrayBuffer();
+
+        const textDecoder = new TextDecoder('latin1');
+        const fileStr = textDecoder.decode(contents).toLowerCase();
+
+        aiKeywords.forEach(kw => {
+            if (fileStr.includes(kw)) found.push(kw.toUpperCase());
+        });
+
+        if (found.length > 0) {
+            metaAlert.style.display = 'block';
+            metaAlert.textContent = `⚠️ AI METADATA DETECTED!\nSoftware / Generator Signatures Found in File Header: [ ${found.join(', ')} ]`;
+        } else {
+            metaAlert.style.display = 'none';
+        }
+    }
+
+    function blobToDataUrl(blob) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(new Error('Failed to read image data.'));
+            reader.readAsDataURL(blob);
+        });
+    }
+
+    function waitForImageLoad(imageElement, src) {
+        return new Promise((resolve, reject) => {
+            imageElement.onload = () => resolve();
+            imageElement.onerror = () => reject(new Error('Failed to decode image data.'));
+            imageElement.src = src;
+        });
     }
 
     function runAnalysis() {
